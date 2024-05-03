@@ -161,3 +161,6 @@ cython_debug/
 
 # Env files not to upload
 .envs/mimic.env
+
+# data directory
+data/
