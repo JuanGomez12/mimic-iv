@@ -12,6 +12,8 @@ GREY="\e[2:N"
 SPACER="----------"
 DONE_MSG = ${GREEN} ${SPACER} Done ${SPACER} ${RESTORE}
 
+LOCAL_ENV_PATH=.envs/local/local.env
+
 define setup_env
 	$(eval ENV_FILE := .envs/$(1)/$(1).env)
 	@@echo -e ${YELLOW} " - setup env $(ENV_FILE)" ${RESTORE}
@@ -38,15 +40,14 @@ coverage_report:
 
 build_project_local:
 	@echo -e ${YELLOW} ${SPACER} Building project locally ${SPACER} ${RESTORE}
-	docker compose --env-file ./.envs/local/local.env build minio mlflow
+	docker compose --env-file ${LOCAL_ENV_PATH} build minio mlflow
 	docker compose run --rm create_buckets
 	@echo -e ${DONE_MSG}
 
-
 build_mimic_database_local:
 	@echo -e ${YELLOW} ${SPACER} Building mimic database locally ${SPACER} ${RESTORE}
-	docker compose --env-file .envs/local/local.env --env-file .envs/mimic.env up -d data_postgresql_mimic
-	docker compose --env-file .envs/local/local.env --env-file .envs/mimic.env exec -w /mimic data_postgresql_mimic  bash create_db.sh
+	docker compose --env-file ${LOCAL_ENV_PATH} --env-file .envs/mimic.env up -d data_postgresql_mimic
+	docker compose --env-file ${LOCAL_ENV_PATH} --env-file .envs/mimic.env exec -w /mimic data_postgresql_mimic  bash create_db.sh
 	@echo -e ${DONE_MSG}
 
 remove_mimic_database_local:
@@ -63,20 +64,32 @@ rebuild_mimic_database_local:
 
 startup_project_local:
 	@echo -e ${YELLOW} ${SPACER}  Building project locally ${SPACER} ${RESTORE}
-	docker compose --env-file ./.envs/local/local.env up -d minio mlflow ml_model_api data_api
-	docker compose --env-file ./.envs/local/local.env run --rm create_buckets
-	# docker compose --env-file ./.envs/local/local.env run --rm data_api sh -c "conda run --no-capture-output -n fastapi python utils/database_initalization.py"
+	docker compose --env-file ${LOCAL_ENV_PATH} up -d minio mlflow ml_model_api data_api
+	docker compose --env-file ${LOCAL_ENV_PATH} run --rm create_buckets
+	# docker compose --env-file ${LOCAL_ENV_PATH} run --rm data_api sh -c "conda run --no-capture-output -n fastapi python utils/database_initalization.py"
 	@echo -e ${DONE_MSG}
 
 run_ml_model_local:
-	@echo -e ${YELLOW} ${SPACER}  Running ML model locally ${SPACER}
-	docker compose --env-file ./.envs/local/local.env up ml_model_train_cpu
+	@echo -e ${YELLOW} ${SPACER} Running ML model locally ${SPACER} ${RESTORE}
+	docker compose --env-file ${LOCAL_ENV_PATH} up ml_model_train_cpu
 	@echo -e ${DONE_MSG}
 
+deploy_local_ml_dev:
+	@echo -e ${YELLOW} ${SPACER} Running ML model dev environment locally ${SPACER}  ${RESTORE}
+	docker compose --env-file ${LOCAL_ENV_PATH} up -d ml_model_dev_cpu
+	@echo -e ${DONE_MSG}
+
+redeploy_local_ml_dev:
+	@echo -e ${RED} ${SPACER} WARNING: Recreating local ML model dev environment ${SPACER}  ${RESTORE}
+	@sleep 10
+	docker compose rm -sf ml_model_dev_cpu
+	make deploy_local_ml_dev
+
 deploy_local:
-	cp /d/.dev/test_ds/DS_model/.envs/local/local.env .env
+	cp ${LOCAL_ENV_PATH} .env
 	make build_project_local
 	make startup_project_local
 	@echo -e ${YELLOW} ${SPACER} Wait 5 seconds for everything to be set up correctly... ${SPACER} ${RESTORE}
 	sleep 5
 	# make run_ml_model_local
+	rm .env
