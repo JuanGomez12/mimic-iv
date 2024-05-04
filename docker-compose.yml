@@ -8,6 +8,8 @@ networks:
     driver: bridge
   data_management:
     driver: bridge
+  mimic_data:
+    driver: bridge
 
 volumes:
   db-data:
@@ -134,17 +136,23 @@ services:
     - ml_logging
     - s3
     - data_management
+    - mimic_data
     volumes:
     - ./ml_model:/app/ml_model
+    - ./utils:/app/utils
     # - ~/.aws/:/root/.aws:ro # If AWS credentials need to be passed, or use environment
     environment:
-    - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-    - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-    - MLFLOW_S3_ENDPOINT_URL=http://nginx:9000
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      MLFLOW_S3_ENDPOINT_URL: http://nginx:9000
+      POSTGRES_USER: ${MIMIC_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${MIMIC_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${MIMIC_POSTGRES_DB}
+      POSTGRES_HOST: data_postgresql_mimic
     command: sh -c "tail -f /dev/null"
     depends_on:
       - mlflow
-      - data_api
+      # - data_api
 
   ml_model_train_cpu:
     build: ./ml_model
@@ -153,6 +161,7 @@ services:
     - ml_logging
     - s3
     - data_management
+    - mimic_data
     volumes:
     - ./ml_model:/app/ml_model
     # - ~/.aws/:/root/.aws:ro # If AWS credentials need to be passed, or use environment
@@ -163,7 +172,8 @@ services:
     command: conda run --no-capture-output -n ml_model python train.py
     depends_on:
      - mlflow
-     - data_api
+     - data_postgresql_mimic
+    #  - data_api
 
   mlflow_test:
     build: ./ml_model
@@ -266,7 +276,7 @@ services:
     ports:
     - "5454:5432"
     networks:
-    - data_management
+    - mimic_data
 
 
   data_api:
