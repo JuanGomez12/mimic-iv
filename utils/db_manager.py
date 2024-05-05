@@ -75,54 +75,57 @@ class MimicDBManager:
     #         cur.close()
     #         self.commit_connection()
 
-    def retrieve_data(self, table_name: str) -> dict:
+    def retrieve_data(self, table_name: str, id_column: str) -> dict:
         if self.table_exists(table_name):
             query = f"SELECT * from {table_name}"
             df = pd.read_sql_query(query, self.generate_connection())
-            df = df.set_index("id")
+            df = df.set_index(id_column)
         else:
             df = pd.DataFrame()
-        return df.to_dict(orient="index")
-
-    def __retrieve_data(self, sql_query) -> pd.DataFrame:
-        df = pd.read_sql_query(sql_query, self.generate_connection())
-        df = df.set_index("id")
         return df
 
-    def retrieve_rows(self, table_name: str, limit: int = 100, offset: int = 0) -> dict:
+    def __retrieve_data(self, sql_query, id_column) -> pd.DataFrame:
+        df = pd.read_sql_query(sql_query, self.generate_connection())
+        df = df.set_index(id_column)
+        return df
+
+    def retrieve_rows(self, table_name: str, id_column: str, limit: int = 100, offset: int = 0) -> dict:
         if self.table_exists(table_name):
             query = f"SELECT * from {table_name} LIMIT {limit} OFFSET {offset}"
-            df = self.__retrieve_data(query)
+            df = self.__retrieve_data(query, id_column)
         else:
             df = pd.DataFrame()
-        return df.to_dict(orient="index")
+        return df
 
-    def retrieve_row(self, table_name: str, row_id: int) -> dict:
+    def retrieve_id(self, table_name: str, id: int, id_column: str) -> dict:
         if self.table_exists(table_name):
-            query = f"SELECT * from {table_name} WHERE id={row_id}"
-            df = self.__retrieve_data(query)
+            query = f"SELECT * from {table_name} WHERE {id_column}={id}"
+            df = self.__retrieve_data(query, id_column)
         else:
             df = pd.DataFrame()
-        return df.to_dict(orient="index")
+        return df
 
-    def retrieve_table_names(self, only_public: bool = True) -> list:
-        query = "SELECT table_name FROM information_schema.tables"
-        if only_public:
-            query += " WHERE table_schema = 'public'"
+    def retrieve_table_names(self) -> list:
+        query = """SELECT table_schema, table_name
+                    FROM information_schema.tables
+                    WHERE table_schema IN ('mimiciv_icu', 'mimiciv_hosp', 'public')"""
         self.generate_connection()
         cur = self.conn.cursor()
         cur.execute(query)
         response = cur.fetchall()
         cur.close()
-        return [resp[0] for resp in response]
+        return [f"{resp[0]}.{resp[1]}" for resp in response]
 
     def table_exists(self, table_name: str) -> bool:
+        table_schema_split, table_name_split = table_name.split(".")
         table_existence_command = f"""
-        SELECT EXISTS(SELECT 1 FROM information_schema.tables
-                        WHERE table_catalog='{self.database}' AND
-                        table_schema='public' AND
-                        table_name='{table_name}');
-                        """
+                                    SELECT EXISTS (
+                                        SELECT 1
+                                        FROM information_schema.tables
+                                        WHERE table_schema ='{table_schema_split}'
+                                        AND table_name = '{table_name_split}'
+                                    );
+                                    """
         self.generate_connection()
         cur = self.conn.cursor()
         cur.execute(table_existence_command)
